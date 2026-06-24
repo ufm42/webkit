@@ -1,5 +1,7 @@
 # webkit
 
+Refer to [CSSFontFace-Exploit](https://github.com/ntfargo/CSSFontFace-Exploit) for techinical info and writeup
+
 # How to use
 ```
 1. py host.py
