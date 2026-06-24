@@ -1,4 +1,4 @@
-# webkit
+# wobkot
 
 Refer to [CSSFontFace-Exploit](https://github.com/ntfargo/CSSFontFace-Exploit) for techinical info and writeup
 
